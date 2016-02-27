@@ -15,32 +15,32 @@ var (
 	defaultBindAddress     string = `0.0.0.0:80`
 )
 
-type Config struct {
-	Interface               []string
-	Update_Interval_Seconds uint
-	Storage_Location        string
-	Live_Size               int
-	Web_Server_Bind_Address string
-	Web_Root                string
+type InterfaceDefinition struct {
+	Alias string
 }
 
-type fconfig struct {
-	Interface_Config Config
+type Config struct {
+	Global struct {
+		Update_Interval_Seconds uint
+		Storage_Location        string
+		Live_Size               int
+		Web_Server_Bind_Address string
+		Web_Root                string
+	}
+	Interface map[string]*struct {
+		Alias string
+	}
 }
 
 func NewConfig(p string) (*Config, error) {
-	c := Config{
-		Update_Interval_Seconds: defaultUpdateInterval,
-		Storage_Location:        defaultStorageLocation,
-		Live_Size:               defaultLiveSize,
-		Web_Server_Bind_Address: defaultBindAddress,
-		Web_Root:                defaultWebRoot,
-	}
-	fc := fconfig{
-		Interface_Config: c,
-	}
-	if err := cfg.ReadFileInto(&fc, p); err != nil {
+	var c Config
+	c.Global.Update_Interval_Seconds = defaultUpdateInterval
+	c.Global.Storage_Location = defaultStorageLocation
+	c.Global.Live_Size = defaultLiveSize
+	c.Global.Web_Server_Bind_Address = defaultBindAddress
+	c.Global.Web_Root = defaultWebRoot
+	if err := cfg.ReadFileInto(&c, p); err != nil {
 		return nil, err
 	}
-	return &fc.Interface_Config, nil
+	return &c, nil
 }

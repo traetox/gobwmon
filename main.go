@@ -43,9 +43,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	lst, err := net.Listen(`tcp`, cfg.Web_Server_Bind_Address)
+	lst, err := net.Listen(`tcp`, cfg.Global.Web_Server_Bind_Address)
 	if err != nil {
-		log.Fatal("Failed to bind to ", cfg.Web_Server_Bind_Address, err)
+		log.Fatal("Failed to bind to ", cfg.Global.Web_Server_Bind_Address, err)
 	}
 	defer lst.Close()
 
@@ -53,15 +53,15 @@ func main() {
 		fmt.Printf("No interfaces specified")
 		return
 	}
-	for i := range cfg.Interface {
-		iface, err := NewIfmon(cfg.Interface[i])
+	for k, v := range cfg.Interface {
+		iface, err := NewIfmon(k, v.Alias)
 		if err != nil {
-			fmt.Printf("Failed to open %v: %v\n", cfg.Interface[i], err)
+			fmt.Printf("Failed to open %v: %v\n", k, err)
 			return
 		}
 		defer iface.Close()
-		dbpath := path.Join(cfg.Storage_Location, cfg.Interface[i]+".db")
-		db, err := NewBwDb(dbpath, cfg.Live_Size, NewBwSample)
+		dbpath := path.Join(cfg.Global.Storage_Location, k+".db")
+		db, err := NewBwDb(dbpath, cfg.Global.Live_Size, NewBwSample)
 		if err != nil {
 			fmt.Printf("Failed to open db %v: %v\n", dbpath, err)
 			return
@@ -87,7 +87,7 @@ func main() {
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 
-	ws, err := NewWebserver(lst, cfg.Web_Root, lf, ifaces)
+	ws, err := NewWebserver(lst, cfg.Global.Web_Root, lf, ifaces)
 	if err != nil {
 		fmt.Printf("Failed to initialize webserver: %v\n", err)
 		return
@@ -101,7 +101,7 @@ func main() {
 	go updateConsumer(ch, ifaces, &wg)
 
 	//kick off the producer
-	interval := time.Duration(cfg.Update_Interval_Seconds) * time.Second
+	interval := time.Duration(cfg.Global.Update_Interval_Seconds) * time.Second
 	go updateProducer(ch, interval, ifaces, &wg, closer, lf)
 
 	//register for signals and wait

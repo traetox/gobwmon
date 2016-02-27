@@ -23,6 +23,7 @@ var (
 
 type Iface struct {
 	name     string
+	alias    string
 	fioSend  *os.File
 	fioRecv  *os.File
 	mtx      *sync.Mutex
@@ -31,7 +32,7 @@ type Iface struct {
 	open     bool
 }
 
-func NewIfmon(name string) (*Iface, error) {
+func NewIfmon(name, alias string) (*Iface, error) {
 	//open up both the file descriptors
 	fioRx, err := os.Open(path.Join(sysClassPath, name, sysClassRxPath))
 	if err != nil {
@@ -45,6 +46,7 @@ func NewIfmon(name string) (*Iface, error) {
 
 	return &Iface{
 		name:    name,
+		alias:   alias,
 		fioSend: fioTx,
 		fioRecv: fioRx,
 		mtx:     &sync.Mutex{},
@@ -118,5 +120,8 @@ func (iface *Iface) GetStats() (uint64, uint64, error) {
 }
 
 func (iface Iface) Name() string {
-	return iface.name
+	if iface.alias == "" {
+		return iface.name
+	}
+	return iface.alias
 }
