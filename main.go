@@ -139,10 +139,15 @@ opLoop:
 					BytesUp:   s,
 					BytesDown: r,
 				}
-				ch <- dataUpdate{
-					data:  sample,
-					index: j,
+				//don't bother writing to the DB if there is no traffic
+				if s != 0 || r != 0 {
+					ch <- dataUpdate{
+						data:  sample,
+						index: j,
+					}
+
 				}
+
 				if err := lf.ServiceLiveFeeders(is[j].iface.Name(), &sample); err != nil {
 					fmt.Printf("Failed to service feeders: %v\n", err)
 					break

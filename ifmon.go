@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"log"
 	"os"
 	"path"
 	"strconv"
@@ -17,6 +18,7 @@ const (
 var (
 	ErrInvalidInterface = errors.New("Interface is invalid")
 	ErrClosed           = errors.New("Interface Closed")
+	ErrInterfaceOpen    = errors.New("Interface is already open")
 	ErrFailedSeek       = errors.New("Failed to seek stat file")
 	ErrInvalidData      = errors.New("Invalid data")
 )
@@ -33,25 +35,49 @@ type Iface struct {
 }
 
 func NewIfmon(name, alias string) (*Iface, error) {
-	//open up both the file descriptors
-	fioRx, err := os.Open(path.Join(sysClassPath, name, sysClassRxPath))
-	if err != nil {
-		return nil, ErrInvalidInterface
+	iface := &Iface{
+		name:  name,
+		alias: alias,
+		mtx:   &sync.Mutex{},
+		open:  true,
 	}
-	fioTx, err := os.Open(path.Join(sysClassPath, name, sysClassTxPath))
+	if err := iface.reopenInterfaces(); err != nil {
+		log.Printf("Failed to open %s, will keep trying: %v\n", name, err)
+	}
+	return iface, nil
+}
+
+//reopeninterfaces is NOT protected by the mutex, caller must hold it
+func (iface *Iface) reopenInterfaces() error {
+	if iface.fioSend != nil || iface.fioRecv != nil {
+		return ErrInterfaceOpen
+	}
+	//open up both the file descriptors
+	fioRx, err := os.Open(path.Join(sysClassPath, iface.name, sysClassRxPath))
+	if err != nil {
+		return ErrInvalidInterface
+	}
+	fioTx, err := os.Open(path.Join(sysClassPath, iface.name, sysClassTxPath))
 	if err != nil {
 		fioRx.Close()
-		return nil, ErrInvalidInterface
+		return ErrInvalidInterface
 	}
+	iface.fioSend = fioTx
+	iface.fioRecv = fioRx
+	return nil
+}
 
-	return &Iface{
-		name:    name,
-		alias:   alias,
-		fioSend: fioTx,
-		fioRecv: fioRx,
-		mtx:     &sync.Mutex{},
-		open:    true,
-	}, nil
+//closeInterfaces tries to do a little cleanup, but is mainly for when an interface disapears
+func (iface *Iface) closeInterfaces() {
+	//shutdown send
+	iface.fioSend.Close()
+	iface.fioSend = nil
+	iface.lastSend = 0
+
+	//shutdown recv
+	iface.fioRecv.Close()
+	iface.fioRecv = nil
+	iface.lastRecv = 0
 }
 
 func (iface *Iface) Close() error {
@@ -97,13 +123,23 @@ func (iface *Iface) getFioInt(fio *os.File) (uint64, error) {
 func (iface *Iface) GetStats() (uint64, uint64, error) {
 	iface.mtx.Lock()
 	defer iface.mtx.Unlock()
+	//check if interfaces are closed, if so try to reopen them
+	if iface.fioSend == nil || iface.fioRecv == nil {
+		if err := iface.reopenInterfaces(); err != nil {
+			//failed, return 0
+			return 0, 0, nil
+		}
+	}
+
 	rx, err := iface.getFioInt(iface.fioRecv)
 	if err != nil {
-		return 0, 0, err
+		iface.closeInterfaces()
+		return 0, 0, nil
 	}
 	tx, err := iface.getFioInt(iface.fioSend)
 	if err != nil {
-		return 0, 0, err
+		iface.closeInterfaces()
+		return 0, 0, nil
 	}
 	sendInt := tx - iface.lastSend
 	recvInt := rx - iface.lastRecv

@@ -437,7 +437,7 @@ func prevHour(ts time.Time) time.Time {
 
 func prevDay(ts time.Time) time.Time {
 	tn, _ := time.Parse(dayFmt, ts.UTC().Format(dayFmt))
-	return tn.Add(24*time.Hour)
+	return tn.Add(24 * time.Hour)
 }
 
 func prevMon(ts time.Time) time.Time {
